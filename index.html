@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مفكرة الصف</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap">
+<style>
+:root{--bg:var(--tg-theme-bg-color,#fff);--fg:var(--tg-theme-text-color,#222);--muted:var(--tg-theme-hint-color,#888);
+  --card:var(--tg-theme-secondary-bg-color,#f3f0f7);--accent:var(--tg-theme-button-color,#6b2d8c);--danger:#d33}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Tajawal,system-ui,sans-serif;font-size:15px}
+.wrap{padding:14px 14px 90px;display:grid;gap:12px}
+h1{font-size:1.2rem;margin:0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:4px}
+select,input,textarea{width:100%;box-sizing:border-box;font:inherit;color:var(--fg);background:var(--bg);
+  border:1px solid color-mix(in srgb,var(--muted) 40%,transparent);border-radius:9px;padding:9px}
+textarea{min-height:52px;resize:vertical}
+.subj{background:var(--card);border-radius:12px;padding:12px;display:grid;gap:8px}
+.top{display:flex;gap:8px;align-items:end}.top>div{flex:1}
+.del{background:none;border:none;color:var(--danger);font:inherit;padding:9px}
+.add{font:inherit;font-weight:700;color:var(--accent);background:none;border:1.5px dashed var(--accent);border-radius:10px;padding:10px}
+.err{color:var(--danger);font-size:.85rem;min-height:1em;margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>مفكرة الصف اليومية</h1>
+  <div class="row">
+    <div><label for="cls">الصف</label><select id="cls"></select></div>
+    <div><label for="sec">الشعبة</label><select id="sec"><option>بدون</option><option>أ</option><option>ب</option><option>ج</option><option>د</option><option>هـ</option></select></div>
+  </div>
+  <div id="subjects" style="display:grid;gap:10px"></div>
+  <button class="add" id="add" type="button">+ إضافة مادة</button>
+  <div><label for="note">ملاحظة لأولياء الأمور (اختياري)</label><textarea id="note"></textarea></div>
+  <p class="err" id="err"></p>
+</div>
+<datalist id="subjList"></datalist>
+<script>
+const tg=window.Telegram.WebApp; tg.ready(); tg.expand();
+const CLASSES=["التمهيدي","الأول الابتدائي","الثاني الابتدائي","الثالث الابتدائي","الرابع الابتدائي","الخامس الابتدائي","السادس الابتدائي","الأول المتوسط","الثاني المتوسط","الثالث المتوسط","الرابع الإعدادي","الخامس الإعدادي","السادس الإعدادي"];
+const SUBJ=["التربية الإسلامية","اللغة العربية","اللغة الإنكليزية","الرياضيات","العلوم","الاجتماعيات","الفيزياء","الكيمياء","الأحياء","الحاسوب","الفنية","الرياضة"];
+const $=id=>document.getElementById(id), esc=s=>String(s||"").replace(/[&<>"]/g,c=>`&#${c.charCodeAt(0)};`);
+CLASSES.forEach(c=>$("cls").add(new Option(c,c)));
+$("subjList").innerHTML=SUBJ.map(s=>`<option value="${s}">`).join("");
+let rows=[{s:"",d:"",h:"",b:""}];
+try{const s=JSON.parse(localStorage.getItem("draft"));if(s){rows=s.rows;$("cls").value=s.cls;$("sec").value=s.sec;$("note").value=s.note}}catch(e){}
+
+function render(){
+  $("subjects").innerHTML=rows.map((r,i)=>`<div class="subj" data-i="${i}">
+   <div class="top"><div><label>المادة</label><input list="subjList" data-k="s" value="${esc(r.s)}"></div>
+   <button class="del" type="button" data-del="${i}">حذف</button></div>
+   <div><label>تم اليوم</label><textarea data-k="d">${esc(r.d)}</textarea></div>
+   <div><label>الواجب (فارغ = لا يوجد)</label><textarea data-k="h">${esc(r.h)}</textarea></div>
+   <div><label>المطلوب إحضاره</label><textarea data-k="b">${esc(r.b)}</textarea></div></div>`).join("");
+}
+const save=()=>{try{localStorage.setItem("draft",JSON.stringify({rows,cls:$("cls").value,sec:$("sec").value,note:$("note").value}))}catch(e){}};
+$("subjects").oninput=e=>{const i=e.target.closest(".subj")?.dataset.i;if(i!==undefined){rows[i][e.target.dataset.k]=e.target.value;save()}};
+$("subjects").onclick=e=>{if(e.target.dataset.del!==undefined){rows.splice(+e.target.dataset.del,1);if(!rows.length)rows.push({s:"",d:"",h:"",b:""});render();save()}};
+$("add").onclick=()=>{rows.push({s:"",d:"",h:"",b:""});render()};
+["cls","sec","note"].forEach(id=>$(id).oninput=save);
+
+tg.MainButton.setParams({text:"إرسال للمشرف",color:"#6b2d8c",text_color:"#ffffff"}).show();
+tg.MainButton.onClick(()=>{
+  const filled=rows.filter(r=>r.s.trim());
+  if(!filled.length){$("err").textContent="اكتب مادة وحدة على الأقل.";return}
+  const data=JSON.stringify({c:$("cls").value,x:$("sec").value,n:$("note").value.trim(),r:filled});
+  if(new TextEncoder().encode(data).length>4096){$("err").textContent="الكلام طويل هواية، اختصر شوية.";return}
+  try{localStorage.removeItem("draft")}catch(e){}
+  tg.sendData(data);  // يسد الفورمة ويوصل البيانات للبوت
+});
+render();
+</script>
+</body>
+</html>
